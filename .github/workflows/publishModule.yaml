@@ -1,0 +1,17 @@
+name: Publish to PS Gallery
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+    publish-to-gallery:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - name: Publish to PS Gallery
+          env:
+            APIKEY: ${{ secrets.APIKEY }}
+          shell: pwsh
+          run: |
+            Publish-Module -Path '.\PoshZoom' -NuGetApiKey $Env:APIKEY -Verbose
