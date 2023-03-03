@@ -13,5 +13,4 @@ jobs:
           env:
             APIKEY: ${{ secrets.APIKEY }}
           shell: pwsh
-          run: |
-            Publish-Module -Path '.\PoshZoom' -NuGetApiKey $Env:APIKEY -Verbose
+          run: .\publish.ps1
