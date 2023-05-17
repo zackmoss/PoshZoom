@@ -554,6 +554,57 @@ function Remove-ZoomUser {
 
 #region Phone Functions
 
+function Add-ZoomPhoneBlockedNumber {
+
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory)]
+        [string] $PhoneNumber,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('inbound', 'outbound')]
+        [string] $BlockType,
+
+        [Parameter(Mandatory)]
+        [string] $Comment
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/blocked_list'
+    }
+
+    process {
+
+        $convertedPhone = $PhoneNumber -replace '(\(|\)|-| |\.|)'
+
+        $request = [System.UriBuilder]$uri
+
+        $requestBody = @{
+            match_type   = 'phoneNumber'
+            phone_number = '+1' + $convertedPhone
+            block_type   = $BlockType
+            status       = 'active'
+            comment      = $Comment
+        }
+
+        $requestBody = $requestBody | ConvertTo-Json
+
+        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Post
+
+        if ($response.ErrorCode) {
+    
+            $response
+        }
+        else {
+    
+            $response
+        }
+    }
+}
 
 function Get-ZoomCallLogs {
 
@@ -1090,6 +1141,75 @@ function Get-ZoomDeskPhoneProvisionTemplate {
 
 }
 
+function Remove-ZoomPhoneBlockedNumber {
+
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory)]
+        [string] $ID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = ('https://api.zoom.us/v2/phone/blocked_list/{0}' -f $ID)
+    }
+
+    process {
+
+        $request = [System.UriBuilder]$uri
+
+        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Delete
+        
+        if ($response.ErrorCode) {
+    
+            $response
+        }
+        else {
+    
+            $response
+        }
+    }
+}
+
+function Get-ZoomPhoneSharedLineGroupSettings {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The unique identifier of the Shared Line Group")]
+        [string] $SharedLineGroupID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+    }
+
+    process {
+
+        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups/{0}' -f $SharedLineGroupID
+
+        $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Method Get
+
+        if ($response.ErrorCode) {
+
+            $response
+        }
+        else {
+
+            $response
+        }
+    }
+
+    end {
+
+    }
+
+}
+
 function Get-ZoomDeskPhoneSettings {
 
     [CmdletBinding()]
@@ -1130,60 +1250,6 @@ function Get-ZoomDeskPhoneSettings {
 
     }
 
-}
-
-function Update-ZoomDeskPhoneDevice {
-
-    [CmdletBinding()]
-    param (
-
-        [Parameter(Mandatory)]
-        [string] $DeviceID,
-
-        [string] $AssignedTo,
-
-        [string] $DisplayName,
-
-        [Parameter(HelpMessage = "This will replace the current Device MAC Address with a new device MAC Address")]
-        [string] $MACAddress,
-
-        [Parameter(Mandatory,
-            HelpMessage = "Provision template id from Get-ZoomDeskPhoneProvisionTemplate. Supported only by some devices. Empty string represents 'No value set'",
-            ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
-        [string] $ProvisionTemplateID
-    )
-
-    begin {
-
-        $headers = New-ZoomHeaders
-    }
-
-    process {
-
-        $uri = 'https://api.zoom.us/v2/phone/devices/{0}' -f $DeviceID
-            
-        $request = [System.UriBuilder] $uri
-    
-        $requestBody = @{
-            assigned_to           = $AssignedTo
-            display_name          = $DisplayName
-            mac_address           = $MACAddress
-            provision_template_id = $ProvisionTemplateID
-        }
-    
-        $requestBody = $requestBody | ConvertTo-Json
-    
-        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Patch
-    
-        if ($response.ErrorCode) {
-    
-            $response
-        }
-        else {
-    
-            $response
-        }
-    }
 }
 
 function Set-ZoomAutoReceptionistNumber {
@@ -1368,6 +1434,60 @@ function Set-ZoomPhoneUserHotDeskStatus {
                     Write-Host -Object ('[INFO] Hot Desking disabled for device:{0}' -f $device.display_name) -ForegroundColor Cyan
                 }
             }
+        }
+    }
+}
+
+function Update-ZoomDeskPhoneDevice {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(Mandatory)]
+        [string] $DeviceID,
+
+        [string] $AssignedTo,
+
+        [string] $DisplayName,
+
+        [Parameter(HelpMessage = "This will replace the current Device MAC Address with a new device MAC Address")]
+        [string] $MACAddress,
+
+        [Parameter(Mandatory,
+            HelpMessage = "Provision template id from Get-ZoomDeskPhoneProvisionTemplate. Supported only by some devices. Empty string represents 'No value set'",
+            ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
+        [string] $ProvisionTemplateID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+    }
+
+    process {
+
+        $uri = 'https://api.zoom.us/v2/phone/devices/{0}' -f $DeviceID
+            
+        $request = [System.UriBuilder] $uri
+    
+        $requestBody = @{
+            assigned_to           = $AssignedTo
+            display_name          = $DisplayName
+            mac_address           = $MACAddress
+            provision_template_id = $ProvisionTemplateID
+        }
+    
+        $requestBody = $requestBody | ConvertTo-Json
+    
+        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Patch
+    
+        if ($response.ErrorCode) {
+    
+            $response
+        }
+        else {
+    
+            $response
         }
     }
 }
