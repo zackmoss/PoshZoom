@@ -1174,6 +1174,64 @@ function Remove-ZoomPhoneBlockedNumber {
     }
 }
 
+function Get-ZoomPhoneSharedLineGroup {
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups'
+
+        # Setting the Zoom API page size. Min 30 Max 300
+        $pageSize = [int] 300
+
+        # Building the initial request
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.shared_line_groups
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.shared_line_groups
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+}
+
 function Get-ZoomPhoneSharedLineGroupSettings {
 
     [CmdletBinding()]
@@ -1207,7 +1265,6 @@ function Get-ZoomPhoneSharedLineGroupSettings {
     end {
 
     }
-
 }
 
 function Get-ZoomDeskPhoneSettings {
@@ -1492,5 +1549,114 @@ function Update-ZoomDeskPhoneDevice {
     }
 }
 
+
+#endregion
+
+#regoin Room Functions
+
+
+function Get-ZoomRoom {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The name of a Zoom Room. If you do not call this parameter, the API will return all of the account's Zoom Rooms")]
+        [string] $Keyword
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/rooms'
+
+        $pageSize = [int] 100
+
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('query_name', $Keyword)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $pageToken = $initialResponse.next_page_token
+
+            $returnObject = @()
+
+            $returnObject += $initialResponse.rooms
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('query_name', $Keyword)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $returnObject += $continuedResponse.rooms
+        }
+    }
+
+    end {
+
+        $returnObject
+    }
+}
+
+function Get-ZoomRoomDevice {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(ValueFromPipeline = $True,
+            HelpMessage = "Unique Identifier of the Zoom Room. This can be retrieved from the response of List Zoom Rooms API")]
+        [string[]] $RoomId
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+    }
+
+    process {
+
+        foreach ($room in $RoomId) {
+
+            $uri = 'https://api.zoom.us/v2/rooms/{0}/devices' -f $room
+
+            $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Method Get
+
+            if ($response.ErrorCode) {
+
+                $response
+            }
+            else {
+
+                $response.devices
+            }
+        }
+    }
+
+    end {
+
+    }
+}
 
 #endregion
