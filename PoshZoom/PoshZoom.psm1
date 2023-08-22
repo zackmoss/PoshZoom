@@ -310,7 +310,7 @@ function Get-ZoomUserSummary {
     }
 }
 
-function Get-ZoomUser {
+function Get-ZoomUserInfo {
 
     [CmdletBinding()]
     param (
@@ -352,7 +352,7 @@ function Get-ZoomUser {
 
 }
 
-function Get-ZoomUsers {
+function Get-ZoomUser {
 
     [CmdletBinding()]
     param (
@@ -366,7 +366,6 @@ function Get-ZoomUsers {
 
         $uri = 'https://api.zoom.us/v2/users/'
 
-        # Setting the Zoom API page size. Min 30 Max 300
         $pageSize = [int] 300
 
         $request = [System.UriBuilder] $uri
@@ -465,7 +464,7 @@ function Get-ZoomUserDelegate {
 
 }
 
-function Invoke-RevokeSSOToken {
+function Invoke-RevokeZoomSSOToken {
 
     [CmdletBinding()]
     param (
@@ -494,7 +493,7 @@ function Invoke-RevokeSSOToken {
             }
             else {
 
-                Write-Host -Object ('[INFO] SSO Token removed successfully for {0}' -f $user) -ForegroundColor 'Yellow'
+                $response
             }
         }
     }
@@ -554,6 +553,71 @@ function Remove-ZoomUser {
 
 #region Phone Functions
 
+function Add-ZoomDeskPhoneDevice {
+
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory)]
+        [string] $MACAddress,
+
+        [Parameter(Mandatory)]
+        [Alias('EmailAddress', 'Email', 'mail')]
+        [string] $UserID,
+
+        [Parameter(Mandatory)]
+        [string] $Brand,
+
+        [Parameter(Mandatory)]
+        [string] $Model,
+
+        [string] $TemplateId
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/devices'
+
+        # Setting the display name to the default
+        $phoneDisplayName = 'Desk Phone'
+    }
+
+    process {
+
+        $rawMAC = $MacAddress -replace '(:|-|\.)'
+        $convertedMAC = $RawMAC -replace '..(?!$)', '$&-'
+
+        $requestBody = @{}
+
+        $requestBody.Add('mac_address', $convertedMAC)
+        $requestBody.Add('assigned_to', $UserID)
+        $requestBody.Add('display_name', $phoneDisplayName)
+        $requestBody.Add('type', $Brand)
+        $requestBody.Add('model', $Model)
+        $requestBody.Add('provision_template_id', $TemplateId)
+
+        $requestBody = $requestBody | ConvertTo-Json
+
+        $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Body $requestBody -Method Post
+
+        if ($response.ErrorCode) {
+
+            $response
+        }
+        else {
+
+            $response
+        }
+    }
+
+    end {
+
+
+    }
+}
+
 function Add-ZoomPhoneBlockedNumber {
 
     [CmdletBinding()]
@@ -596,11 +660,11 @@ function Add-ZoomPhoneBlockedNumber {
         $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Post
 
         if ($response.ErrorCode) {
-    
+
             $response
         }
         else {
-    
+
             $response
         }
     }
@@ -637,10 +701,8 @@ function Get-ZoomCallLogs {
 
         $uri = 'https://api.zoom.us/v2/phone/call_logs'
 
-        # Setting the Zoom API page size. Min 30 Max 300
         $pageSize = [int] 300
 
-        # Building the initial request
         $request = [System.UriBuilder] $uri
         $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
         $query.Add('type', $Type)
@@ -846,6 +908,359 @@ function Get-ZoomPhoneHotDeskingStatus {
     }
 }
 
+function Get-ZoomPhoneNumber {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The query response by number assignment")]
+        [ValidateSet("all", "assigned", "unassigned", "byoc")]
+        [string] $Type,
+
+        [Parameter(HelpMessage = "The type of assignee to whom the number is assigned")]
+        [ValidateSet("user", "callQueue", "autoReceptionist", "commonAreaPhone")]
+        [string] $AssignedType,
+
+        [Parameter(HelpMessage = "The type of phone number")]
+        [ValidateSet("toll", "tollfree")]
+        [string] $NumberType,
+
+        [Parameter(HelpMessage = "The unique identifier of the site from the List Phone Sites API")]
+        [string] $SiteID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/numbers'
+
+        $pageSize = [int] 100
+
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+
+        if ($Type) {
+
+            $query.Add('type', $Type)
+        }
+        if ($AssignedType) {
+
+            $query.Add('extension_type', $AssignedType)
+        }
+        if ($NumberType) {
+
+            $query.Add('number_type', $NumberType)
+        }
+        if ($SiteID) {
+
+            $query.Add('site_id', $SiteID)
+        }
+
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.phone_numbers
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.phone_numbers
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+
+}
+
+function Get-ZoomDeskPhoneDevice {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "Device status: assigned or unassigned to list device status in Zoom account")]
+        [ValidateSet("assigned", "unassigned")]
+        [string] $Type,
+
+        [Parameter(HelpMessage = "The unique identifier of the site from the List Phone Sites API")]
+        [string] $SiteID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/devices'
+
+        # Setting the Zoom API page size. Min 30 Max 300
+        $pageSize = [int] 300
+
+        # Building the initial request
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('type', $Type)
+        $query.Add('site_id', $SiteID)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.devices
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('type', $Type)
+            $query.Add('site_id', $SiteID)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.devices
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+
+}
+
+function Get-ZoomDeskPhoneProvisionTemplate {
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/provision_templates'
+
+        # Setting the Zoom API page size. Min 30 Max 300
+        $pageSize = [int] 300
+
+        # Building the initial request
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.provision_templates
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.provision_templates
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+
+}
+
+function Remove-ZoomPhoneBlockedNumber {
+
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory)]
+        [string] $ID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = ('https://api.zoom.us/v2/phone/blocked_list/{0}' -f $ID)
+    }
+
+    process {
+
+        $request = [System.UriBuilder]$uri
+
+        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Delete
+
+        if ($response.ErrorCode) {
+
+            $response
+        }
+        else {
+
+            $response
+        }
+    }
+}
+
+function Get-ZoomPhoneSharedLineGroup {
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups'
+
+        # Setting the Zoom API page size. Min 30 Max 300
+        $pageSize = [int] 300
+
+        # Building the initial request
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.shared_line_groups
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.shared_line_groups
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+}
+
+function Get-ZoomPhoneSharedLineGroupSettings {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The unique identifier of the Shared Line Group")]
+        [string] $SharedLineGroupID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+    }
+
+    process {
+
+        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups/{0}' -f $SharedLineGroupID
+
+        $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Method Get
+
+        if ($response.ErrorCode) {
+
+            $response
+        }
+        else {
+
+            $response
+        }
+    }
+
+    end {
+
+    }
+}
+
 function Get-ZoomPhoneUser {
 
     [CmdletBinding()]
@@ -1008,262 +1423,71 @@ function Get-ZoomPhoneUserProfileSettings {
 
 }
 
-function Get-ZoomDeskPhoneDevice {
+function Get-ZoomDeskPhoneIPInfo {
 
-    [CmdletBinding()]
-    param (
+    $headers = New-ZoomHeaders
 
-        [Parameter(HelpMessage = "Device status: assigned or unassigned to list device status in Zoom account")]
-        [ValidateSet("assigned", "unassigned")]
-        [string] $Type,
+    $uri = 'https://api.zoom.us/v2/phone/metrics/location_tracking'
 
-        [Parameter(HelpMessage = "The unique identifier of the site from the List Phone Sites API")]
-        [string] $SiteID
-    )
+    # Setting the Zoom API page size. Min 30 Max 100
+    $pageSize = [int] 100
 
-    begin {
+    # Building the initial request
+    $request = [System.UriBuilder] $uri
+    $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+    $query.Add('page_size', $pageSize)
+    $query.Add('type', 6)
 
-        $headers = New-ZoomHeaders
+    $request.Query = $query.ToString()
 
-        $uri = 'https://api.zoom.us/v2/phone/devices'
+    $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
 
-        # Setting the Zoom API page size. Min 30 Max 300
-        $pageSize = [int] 300
+    $pageToken = $initialResponse.next_page_token
 
-        # Building the initial request
-        $request = [System.UriBuilder] $uri
+    $initialResponse.location_tracking | ForEach-Object {
+
+        $convertedPhoneMAC = ($PSItem.device.mac_address -replace '(:|-|\.)')
+        $convertedSwitchMAC = ($PSItem.network_switch.mac_address -replace '(:|-|\.)')
+
+        [PSCustomObject]@{
+
+            MACAddress        = $convertedPhoneMAC
+            IPAddress         = $PSItem.device.private_ip
+            NetworkSwitchPort = $PSItem.network_switch.port
+            NetworkSwitchMAC  = $convertedSwitchMAC
+            Assignee          = $PSItem.assignees.name
+            AssigneeExtension = $PSItem.assignees.extension_number
+        }
+    }
+
+    while ($pageToken) {
+
         $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-        $query.Add('type', $Type)
-        $query.Add('site_id', $SiteID)
         $query.Add('page_size', $pageSize)
+        $query.Add('type', 6)
+        $query.Add('next_page_token', $pageToken)
 
         $request.Query = $query.ToString()
 
-        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+        $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
 
-        $pageToken = $initialResponse.next_page_token
+        $pageToken = $continuedResponse.next_page_token
 
-        $initialObject = @()
+        $continuedResponse.location_tracking | ForEach-Object {
 
-        if ($initialResponse.ErrorCode) {
+            $convertedPhoneMAC = ($PSItem.device.mac_address -replace '(:|-|\.)')
+            $convertedSwitchMAC = ($PSItem.network_switch.mac_address -replace '(:|-|\.)')
 
-            $initialResponse
+            [PSCustomObject]@{
+
+                MACAddress        = $convertedPhoneMAC
+                IPAddress         = $PSItem.device.private_ip
+                NetworkSwitchPort = $PSItem.network_switch.port
+                NetworkSwitchMAC  = $convertedSwitchMAC
+                Assignee          = $PSItem.assignees.name
+                AssigneeExtension = $PSItem.assignees.extension_number
+            }
         }
-        else {
-
-            $initialObject += $initialResponse.devices
-        }
-    }
-
-    process {
-
-        while ($pageToken) {
-
-            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-            $query.Add('type', $Type)
-            $query.Add('site_id', $SiteID)
-            $query.Add('page_size', $pageSize)
-            $query.Add('next_page_token', $pageToken)
-
-            $request.Query = $query.ToString()
-
-            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
-
-            $pageToken = $continuedResponse.next_page_token
-
-            $initialObject += $continuedResponse.devices
-        }
-    }
-
-    end {
-
-        $initialObject
-    }
-
-}
-
-function Get-ZoomDeskPhoneProvisionTemplate {
-
-    begin {
-
-        $headers = New-ZoomHeaders
-
-        $uri = 'https://api.zoom.us/v2/phone/provision_templates'
-
-        # Setting the Zoom API page size. Min 30 Max 300
-        $pageSize = [int] 300
-
-        # Building the initial request
-        $request = [System.UriBuilder] $uri
-        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-        $query.Add('page_size', $pageSize)
-
-        $request.Query = $query.ToString()
-
-        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
-
-        $pageToken = $initialResponse.next_page_token
-
-        $initialObject = @()
-
-        if ($initialResponse.ErrorCode) {
-
-            $initialResponse
-        }
-        else {
-
-            $initialObject += $initialResponse.provision_templates
-        }
-    }
-
-    process {
-
-        while ($pageToken) {
-
-            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-            $query.Add('page_size', $pageSize)
-            $query.Add('next_page_token', $pageToken)
-
-            $request.Query = $query.ToString()
-
-            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
-
-            $pageToken = $continuedResponse.next_page_token
-
-            $initialObject += $continuedResponse.provision_templates
-        }
-    }
-
-    end {
-
-        $initialObject
-    }
-
-}
-
-function Remove-ZoomPhoneBlockedNumber {
-
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory)]
-        [string] $ID
-    )
-
-    begin {
-
-        $headers = New-ZoomHeaders
-
-        $uri = ('https://api.zoom.us/v2/phone/blocked_list/{0}' -f $ID)
-    }
-
-    process {
-
-        $request = [System.UriBuilder]$uri
-
-        $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Delete
-        
-        if ($response.ErrorCode) {
-    
-            $response
-        }
-        else {
-    
-            $response
-        }
-    }
-}
-
-function Get-ZoomPhoneSharedLineGroup {
-
-    begin {
-
-        $headers = New-ZoomHeaders
-
-        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups'
-
-        # Setting the Zoom API page size. Min 30 Max 300
-        $pageSize = [int] 300
-
-        # Building the initial request
-        $request = [System.UriBuilder] $uri
-        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-        $query.Add('page_size', $pageSize)
-
-        $request.Query = $query.ToString()
-
-        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
-
-        $pageToken = $initialResponse.next_page_token
-
-        $initialObject = @()
-
-        if ($initialResponse.ErrorCode) {
-
-            $initialResponse
-        }
-        else {
-
-            $initialObject += $initialResponse.shared_line_groups
-        }
-    }
-
-    process {
-
-        while ($pageToken) {
-
-            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
-            $query.Add('page_size', $pageSize)
-            $query.Add('next_page_token', $pageToken)
-
-            $request.Query = $query.ToString()
-
-            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
-
-            $pageToken = $continuedResponse.next_page_token
-
-            $initialObject += $continuedResponse.shared_line_groups
-        }
-    }
-
-    end {
-
-        $initialObject
-    }
-}
-
-function Get-ZoomPhoneSharedLineGroupSettings {
-
-    [CmdletBinding()]
-    param (
-
-        [Parameter(HelpMessage = "The unique identifier of the Shared Line Group")]
-        [string] $SharedLineGroupID
-    )
-
-    begin {
-
-        $headers = New-ZoomHeaders
-    }
-
-    process {
-
-        $uri = 'https://api.zoom.us/v2/phone/shared_line_groups/{0}' -f $SharedLineGroupID
-
-        $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Method Get
-
-        if ($response.ErrorCode) {
-
-            $response
-        }
-        else {
-
-            $response
-        }
-    }
-
-    end {
-
     }
 }
 
@@ -1309,6 +1533,160 @@ function Get-ZoomDeskPhoneSettings {
 
 }
 
+function Get-ZoomPhoneQueue {
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/call_queues'
+
+        # Setting the Zoom API page size. Min 30 Max 300
+        $pageSize = [int] 300
+
+        # Building the initial request
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        $initialObject = @()
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.call_queues
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.call_queues
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+}
+
+function Get-ZoomPhoneQueueMembers {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The unique identifier of the Queue")]
+        [string] $QueueID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+
+        $uri = 'https://api.zoom.us/v2/phone/call_queues/{0}/members' -f $QueueID
+
+        $pageSize = [int] 300
+
+        $request = [System.UriBuilder] $uri
+        $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        $query.Add('page_size', $pageSize)
+
+        $request.Query = $query.ToString()
+
+        $initialResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+        $pageToken = $initialResponse.next_page_token
+
+        if ($initialResponse.ErrorCode) {
+
+            $initialResponse
+        }
+        else {
+
+            $initialObject += $initialResponse.call_queue_members
+        }
+    }
+
+    process {
+
+        while ($pageToken) {
+
+            $query = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+            $query.Add('page_size', $pageSize)
+            $query.Add('next_page_token', $pageToken)
+
+            $request.Query = $query.ToString()
+
+            $continuedResponse = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Method Get
+
+            $pageToken = $continuedResponse.next_page_token
+
+            $initialObject += $continuedResponse.call_queue_members
+        }
+    }
+
+    end {
+
+        $initialObject
+    }
+}
+
+function Get-ZoomPhoneQueueSettings {
+
+    [CmdletBinding()]
+    param (
+
+        [Parameter(HelpMessage = "The unique identifier of the Queue")]
+        [string] $QueueID
+    )
+
+    begin {
+
+        $headers = New-ZoomHeaders
+    }
+
+    process {
+
+        $uri = 'https://api.zoom.us/v2/phone/call_queues/{0}' -f $QueueID
+
+        $response = Invoke-ZoomRestMethod -Uri $uri -Headers $headers -Method Get
+
+        if ($response.ErrorCode) {
+
+            $response
+        }
+        else {
+
+            $response
+        }
+    }
+
+    end {
+
+    }
+}
+
 function Set-ZoomAutoReceptionistNumber {
 
     [CmdletBinding()]
@@ -1337,9 +1715,9 @@ function Set-ZoomAutoReceptionistNumber {
             $phoneNumberID = Get-ZoomPhoneNumbers -ApiKey $ApiKey -ApiSecret $ApiSecret | Where-Object {
                 $_.Assigned -eq $false -and $_.Number -eq $convertedNumber
             } | Select-Object -ExpandProperty Id
-            
+
             $request = [System.UriBuilder] $uri
-    
+
             $requestBody = @{
                 phone_numbers = @(
                     @{
@@ -1347,17 +1725,17 @@ function Set-ZoomAutoReceptionistNumber {
                     }
                 )
             }
-    
+
             $requestBody = $requestBody | ConvertTo-Json
-    
+
             $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Post
-    
+
             if ($response.ErrorCode) {
-    
+
                 $response
             }
             else {
-    
+
                 $response
             }
         }
@@ -1524,26 +1902,26 @@ function Update-ZoomDeskPhoneDevice {
     process {
 
         $uri = 'https://api.zoom.us/v2/phone/devices/{0}' -f $DeviceID
-            
+
         $request = [System.UriBuilder] $uri
-    
+
         $requestBody = @{
             assigned_to           = $AssignedTo
             display_name          = $DisplayName
             mac_address           = $MACAddress
             provision_template_id = $ProvisionTemplateID
         }
-    
+
         $requestBody = $requestBody | ConvertTo-Json
-    
+
         $response = Invoke-ZoomRestMethod -Uri $request.Uri -Headers $headers -Body $requestBody -Method Patch
-    
+
         if ($response.ErrorCode) {
-    
+
             $response
         }
         else {
-    
+
             $response
         }
     }
@@ -1625,7 +2003,7 @@ function Get-ZoomRoomDevice {
     [CmdletBinding()]
     param (
 
-        [Parameter(ValueFromPipeline = $True,
+        [Parameter(Mandatory, ValueFromPipeline = $True,
             HelpMessage = "Unique Identifier of the Zoom Room. This can be retrieved from the response of List Zoom Rooms API")]
         [string[]] $RoomId
     )
