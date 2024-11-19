@@ -12,7 +12,7 @@
     RootModule = 'PoshZoom.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.1'
+    ModuleVersion     = '1.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -110,6 +110,11 @@
             ReleaseNotes = '
         Version 0.1
         - First release!
+
+        Version 1.0
+        - Lots of code formatting and function name changes. Please look through the module after updating to be sure any scripts have not broken
+        due to function name changes.
+        - Updated Chat and Meeting Recording functions
         '
 
         } # End of PSData hashtable
